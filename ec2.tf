@@ -1,104 +1,45 @@
-resource "aws_instance" "instance_a" { //Instance A
-  ami           = var.ami
-  instance_type = "t2.micro"
-
-  subnet_id = var.subnet_a
-
-  key_name = "<PEMKEYNAME>"
-
+resource "aws_instance" "aara" {
+  ami           = var.instance_ami
+  instance_type = var.instance_type
+  key_name      = var.key_name  # Reference the key name here
+  subnet_id     = var.subnet_ids[0]  # First subnet for Aara
+  security_groups = [var.security_groups["instance_sg"]]  # Using security group for EC2 instances
   tags = {
-    Name = "Instance A"
+    Name = "Aara"
   }
-
-  user_data = <<-EOF
-              #!/bin/bash
-              sudo apt-get update
-              sudo apt-get install -y nginx
-              sudo systemctl start nginx
-              sudo systemctl enable nginx
-              echo '<!doctype html>
-              <html lang="en"><h1>Home page!</h1></br>
-              <h3>(Instance A)</h3>
-              </html>' | sudo tee /var/www/html/index.html
-              EOF
+  user_data = data.template_file.apache_userdata_aara.rendered
 }
-
-resource "aws_instance" "instance_b" { //Instance B
-  ami           = var.ami
-  instance_type = "t2.micro"
-
-  subnet_id = var.subnet_b
-
-  key_name = "tfserverkey"
-
+resource "aws_instance" "suriya" {
+  ami           = var.instance_ami
+  instance_type = var.instance_type
+  key_name      = var.key_name  # Reference the key name here
+  subnet_id     = var.subnet_ids[1]  # Second subnet for Suriya
+  security_groups = [var.security_groups["instance_sg"]]  # Using security group for EC2 instances
   tags = {
-    Name = "Instance B"
+    Name = "Suriya"
   }
-
-  user_data = <<-EOF
-              #!/bin/bash
-              sudo apt-get update
-              sudo apt-get install -y nginx
-              sudo systemctl start nginx
-              sudo systemctl enable nginx
-              echo '<!doctype html>
-              <html lang="en"><h1>Images!</h1></br>
-              <h3>(Instance B)</h3>
-              </html>' | sudo tee /var/www/html/index.html
-              echo 'server {
-                        listen 80 default_server;
-                        listen [::]:80 default_server;
-                        root /var/www/html;
-                        index index.html index.htm index.nginx-debian.html;
-                        server_name _;
-                        location /images/ {
-                            alias /var/www/html/;
-                            index index.html;
-                        }
-                        location / {
-                            try_files $uri $uri/ =404;
-                        }
-                    }' | sudo tee /etc/nginx/sites-available/default
-              sudo systemctl reload nginx
-              EOF
+  user_data = data.template_file.apache_userdata_suriya.rendered
 }
-
-resource "aws_instance" "instance_c" { //Instance C
-  ami           = var.ami
-  instance_type = "t2.micro"
-
-  subnet_id = var.subnet_c
-
-  key_name = "tfserverkey"
-
-  tags = {
-    Name = "Instance C"
+resource "aws_lb_target_group" "web_target_group" {
+  name     = "web-target-group"
+  port     = 80
+  protocol = "HTTP"
+  vpc_id   = var.vpc_id
+  health_check {
+    path = "/"
+    interval = 30
+    timeout  = 5
+    healthy_threshold = 2
+    unhealthy_threshold = 2
   }
-
-  user_data = <<-EOF
-              #!/bin/bash
-              sudo apt-get update
-              sudo apt-get install -y nginx
-              sudo systemctl start nginx
-              sudo systemctl enable nginx
-              echo '<!doctype html>
-              <html lang="en"><h1>Register!</h1></br>
-              <h3>(Instance C)</h3>
-              </html>' | sudo tee /var/www/html/index.html
-              echo 'server {
-                        listen 80 default_server;
-                        listen [::]:80 default_server;
-                        root /var/www/html;
-                        index index.html index.htm index.nginx-debian.html;
-                        server_name _;
-                        location /register/ {
-                            alias /var/www/html/;
-                            index index.html;
-                        }
-                        location / {
-                            try_files $uri $uri/ =404;
-                        }
-                    }' | sudo tee /etc/nginx/sites-available/default
-              sudo systemctl reload nginx
-              EOF
+}
+resource "aws_lb_target_group_attachment" "aara_attachment" {
+  target_group_arn = aws_lb_target_group.web_target_group.arn
+  target_id        = aws_instance.aara.id  # Referring to the Aara instance
+  port             = 80
+}
+resource "aws_lb_target_group_attachment" "suriya_attachment" {
+  target_group_arn = aws_lb_target_group.web_target_group.arn
+  target_id        = aws_instance.suriya.id  # Referring to the Suriya instance
+  port             = 80
 }
